@@ -12,8 +12,13 @@ export const HERNA = {
   // Facebook stránka pro odkaz m.me/<handle> (volitelné).
   facebookHandle: '',
   // E-mail herny (kam chodí notifikace o nových žádostech) - nastav i v Edge Function.
-  email: 'herna@example.com'
+  email: 'herna@example.com',
+  // Odkaz na zásady zpracování osobních údajů (volitelné). Když je prázdné, odkaz se nezobrazí.
+  privacyUrl: ''
 }
+
+// Měna pro zobrazení cen balíčků.
+export const CURRENCY = 'Kč'
 
 // Otevírací doba a délky bloků. Časy jsou lokální (Europe/Prague).
 export const OPENING = {

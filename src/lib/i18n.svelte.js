@@ -90,6 +90,10 @@ const DICT = {
     'len.2h': '2 hodiny',
     'len.4h': '4 hodiny',
 
+    'price.onRequest': 'Cena na dotaz',
+    'cal.full': 'Obsazeno',
+    'form.privacy': 'Zásady zpracování osobních údajů',
+
     'pkg.none.name': 'Bez jídla a pití',
     'pkg.none.desc': 'Pronájem herny.',
     'pkg.food.name': 'S jídlem a pitím',
@@ -154,6 +158,10 @@ const DICT = {
 
     'len.2h': '2 sata',
     'len.4h': '4 sata',
+
+    'price.onRequest': 'Cena na upit',
+    'cal.full': 'Zauzeto',
+    'form.privacy': 'Pravila obrade ličnih podataka',
 
     'pkg.none.name': 'Bez hrane i pića',
     'pkg.none.desc': 'Iznajmljivanje igraonice.',

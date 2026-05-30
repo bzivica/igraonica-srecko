@@ -1,28 +1,31 @@
 <script>
   import { t, fmtDate, fmtTime, setLocale, i18n, LOCALES } from '../lib/i18n.svelte.js'
-  import { SLOT_LENGTHS, PACKAGES } from '../lib/config.js'
+  import { SLOT_LENGTHS, PACKAGES, CURRENCY, HERNA } from '../lib/config.js'
   import { freeStarts, slotMinutes, isBookableDay, bookingDateRange, startOfDay } from '../lib/slots.js'
   import { getBusySlots, createBooking, isConfigured } from '../lib/bookings.js'
   import Calendar from '../components/Calendar.svelte'
 
   const MS_PER_MINUTE = 60_000
+  // Nejkratší nabízená délka - podle ní se pozná „plně obsazený den" v kalendáři.
+  const SHORTEST_LEN_ID = [...SLOT_LENGTHS].sort((a, b) => a.minutes - b.minutes)[0]?.id
 
   let day = $state(null) // Date vybraného dne
   let lengthId = $state(null)
   let startsAt = $state(null) // Date začátku
   let pkg = $state(null)
 
-  let busy = $state([])
-  let loadingTimes = $state(false)
+  let monthBusy = $state([]) // obsazenost zobrazeného měsíce
+  let monthLoading = $state(false)
 
   let form = $state({ name: '', phone: '', email: '', children: '', note: '', consent: false })
   let submitting = $state(false)
   let submitted = $state(false)
+  let lastBooking = $state(null) // { startsAt, lengthId, pkg } pro souhrn na success
   let errorKey = $state(null)
 
   const range = bookingDateRange()
 
-  const times = $derived(day && lengthId ? freeStarts(day, lengthId, busy) : [])
+  const times = $derived(day && lengthId ? freeStarts(day, lengthId, monthBusy) : [])
   const minutes = $derived(slotMinutes(lengthId))
 
   const canSubmit = $derived(
@@ -36,10 +39,33 @@
     )
   )
 
-  async function selectDay(d) {
+  // Den bez jediného volného začátku i pro nejkratší délku = plně obsazený.
+  function isFull(date) {
+    if (!isConfigured) return false
+    return freeStarts(date, SHORTEST_LEN_ID, monthBusy).length === 0
+  }
+
+  async function loadMonth(from, to) {
+    if (!isConfigured) {
+      monthBusy = []
+      return
+    }
+    monthLoading = true
+    try {
+      const start = startOfDay(from)
+      const end = startOfDay(to)
+      end.setHours(23, 59, 59, 999)
+      monthBusy = await getBusySlots(start, end)
+    } catch {
+      monthBusy = []
+    } finally {
+      monthLoading = false
+    }
+  }
+
+  function selectDay(d) {
     day = d
     startsAt = null
-    await loadBusy(d)
   }
 
   function selectLength(id) {
@@ -47,26 +73,12 @@
     startsAt = null
   }
 
-  async function loadBusy(d) {
-    if (!isConfigured) {
-      busy = []
-      return
-    }
-    loadingTimes = true
-    try {
-      const from = startOfDay(d)
-      const to = startOfDay(d)
-      to.setHours(23, 59, 59, 999)
-      busy = await getBusySlots(from, to)
-    } catch {
-      busy = []
-    } finally {
-      loadingTimes = false
-    }
-  }
-
   function lengthLabel(id) {
     return t(`len.${id}`)
+  }
+
+  function priceLabel(p) {
+    return p.price > 0 ? `${p.price} ${CURRENCY}` : t('price.onRequest')
   }
 
   async function submit() {
@@ -92,6 +104,7 @@
         customer_email: form.email.trim(),
         note: form.note.trim() || null
       })
+      lastBooking = { startsAt, lengthId, pkg }
       submitted = true
     } catch {
       errorKey = 'error.generic'
@@ -105,9 +118,9 @@
     lengthId = null
     startsAt = null
     pkg = null
-    busy = []
     form = { name: '', phone: '', email: '', children: '', note: '', consent: false }
     submitted = false
+    lastBooking = null
     errorKey = null
   }
 </script>
@@ -127,6 +140,12 @@
 {#if submitted}
   <div class="card center">
     <h1>{t('success.title')}</h1>
+    {#if lastBooking}
+      <div class="summary muted" style="display:inline-block; text-align:left;">
+        <div><strong>{t('summary.when')}:</strong> {fmtDate(lastBooking.startsAt)} {fmtTime(lastBooking.startsAt)} ({lengthLabel(lastBooking.lengthId)})</div>
+        <div><strong>{t('summary.package')}:</strong> {t(`pkg.${lastBooking.pkg}.name`)}</div>
+      </div>
+    {/if}
     <p>{t('success.body')}</p>
     <button onclick={reset}>{t('success.again')}</button>
   </div>
@@ -145,8 +164,10 @@
       min={range.min}
       max={range.max}
       enabled={isBookableDay}
+      {isFull}
       selected={day}
       onselect={selectDay}
+      onmonthchange={loadMonth}
     />
   </section>
 
@@ -170,7 +191,7 @@
 
       {#if lengthId}
         <label>{t('step.time')}</label>
-        {#if loadingTimes}
+        {#if monthLoading}
           <p class="muted">{t('time.loading')}</p>
         {:else if times.length === 0}
           <p class="muted">{t('time.none')}</p>
@@ -202,7 +223,10 @@
             class:active={pkg === p.id}
             onclick={() => (pkg = p.id)}
           >
-            <strong>{t(`pkg.${p.id}.name`)}</strong>
+            <span class="pkg-head">
+              <strong>{t(`pkg.${p.id}.name`)}</strong>
+              <span class="price">{priceLabel(p)}</span>
+            </span>
             <span class="muted">{t(`pkg.${p.id}.desc`)}</span>
           </button>
         {/each}
@@ -237,7 +261,12 @@
 
       <label class="consent">
         <input type="checkbox" bind:checked={form.consent} />
-        <span>{t('form.consent')}</span>
+        <span>
+          {t('form.consent')}
+          {#if HERNA.privacyUrl}
+            <a href={HERNA.privacyUrl} target="_blank" rel="noopener">{t('form.privacy')}</a>
+          {/if}
+        </span>
       </label>
 
       <div class="notice info">{t('notice.notBinding')}</div>
@@ -276,9 +305,18 @@
   button.pkg {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 2px;
     text-align: left;
+  }
+  .pkg-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .price {
+    white-space: nowrap;
+    font-weight: 700;
   }
   button.pkg.active span {
     color: #ede9fe;
@@ -292,6 +330,9 @@
   .consent input {
     width: auto;
     margin-top: 3px;
+  }
+  .consent a {
+    color: var(--accent-dark);
   }
   .summary {
     margin-bottom: 8px;

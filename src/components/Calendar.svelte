@@ -1,8 +1,17 @@
 <script>
   import { localeBcp47 } from '../lib/i18n.svelte.js'
 
-  // min/max = Date (lokální půlnoc), enabled = predikát (Date) -> bool, selected = Date | null
-  let { min, max, enabled = () => true, selected = null, onselect } = $props()
+  // min/max = Date (lokální půlnoc), enabled/isFull = predikáty (Date) -> bool, selected = Date | null
+  // onmonthchange(first, last) se volá při zobrazení měsíce (rodič si načte obsazenost rozsahu).
+  let {
+    min,
+    max,
+    enabled = () => true,
+    isFull = () => false,
+    selected = null,
+    onselect,
+    onmonthchange
+  } = $props()
 
   const DAYS_IN_WEEK = 7
   // 1. 1. 2024 byl pondělí - referenční týden pro názvy dnů (pondělím počínaje).
@@ -62,10 +71,25 @@
     return out
   }
 
-  function isEnabled(d) {
+  // Den je v rozsahu a otevírací.
+  function inRange(d) {
     const day = startOfDay(d)
     return day >= startOfDay(min) && day <= startOfDay(max) && enabled(day)
   }
+  // Otevírací den, ale bez volného termínu.
+  function isFullDay(d) {
+    return inRange(d) && isFull(startOfDay(d))
+  }
+  function isEnabled(d) {
+    return inRange(d) && !isFullDay(d)
+  }
+
+  // Při změně zobrazeného měsíce ohlásíme rozsah rodiči (kvůli načtení obsazenosti).
+  $effect(() => {
+    const first = startOfMonth(view)
+    const last = new Date(view.getFullYear(), view.getMonth() + 1, 0)
+    onmonthchange?.(first, last)
+  })
 
   function prev() {
     if (canPrev) view = new Date(view.getFullYear(), view.getMonth() - 1, 1)
@@ -100,6 +124,7 @@
           type="button"
           class="day"
           class:selected={selected && sameDay(cell, selected)}
+          class:full={isFullDay(cell)}
           disabled={!isEnabled(cell)}
           onclick={() => pick(cell)}
         >
@@ -158,6 +183,13 @@
     background: transparent;
     color: #d1d5db;
     border-color: transparent;
+    opacity: 1;
+  }
+  button.day.full {
+    background: #fee2e2;
+    color: #b91c1c;
+    border-color: #fecaca;
+    text-decoration: line-through;
     opacity: 1;
   }
   button.day.selected {
