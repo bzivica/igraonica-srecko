@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-ssr
+.env
+.env.local
+*.local
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+supabase/.temp
+session-updates.txt
+
+# Pracovní/sezení dokumenty (nepatří do repa)
+STAV-PROJEKTU.md
